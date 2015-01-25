@@ -198,7 +198,7 @@ function learn(S::GlobalState, episodes_no::Int64)
     prev_states = Array(AgentState, S.N);
     states = Array(AgentState, S.N);
     rewards = Array(Float64, S.N);
-    for season in 1:10000
+    for season in 1:100000
         S = init_scenario(S.height, S.width, S.deposits, S.mines, S.N, S.K);
         for i in 1:S.N
             states[i] = perceive(S, i);
@@ -243,14 +243,16 @@ function learn(S::GlobalState, episodes_no::Int64)
                           0.95, 0.05);
             end
             if ep % 1000 == 0
-                println(mean(map(i->length(keys(Qs[i])), 1:S.N)));
-                scores = Array(Float64, 20);
-                for es in 1:10
+                scores = Array(Float64, 50);
+                for es in 1:20
                     S1 = init_scenario(S.height, S.width,
                                        S.deposits, S.mines, S.N, S.K);
-                    scores[es] = evaluate(S1, 250, Qs);
+                    scores[es] = evaluate(S1, 300, Qs);
                 end
-                println("On episode ", ep, " : score = ", mean(scores));
+                println("season=", season, ",",
+                        "\tepisode=", ep, ",",
+                        "\tstates=", mean(map(i->length(keys(Qs[i])), 1:S.N)),
+                        "\tscore=", mean(scores));
             end
         end
     end
@@ -339,4 +341,4 @@ end
 
 S = init_scenario(6, 6, reshape([2, 2],2,1), reshape([5, 5],2,1), 3, 8);
 println(typeof(S.N))
-learn(S, 10000);
+learn(S, 100000);
