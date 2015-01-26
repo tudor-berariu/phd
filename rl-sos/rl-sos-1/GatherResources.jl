@@ -329,10 +329,8 @@ function learn(P::GlobalParameters)
                   Guide.ylabel("avg. # of states"),
                   Guide.title("At the end of season $season")));
         # Save Qs for later use
-        if season % 100 == 0
-            JLD.save("results/qs_S$season.jld", "Qs", Qs);
-        end
     end
+    JLD.save("results/qs_S$season.jld", "Qs", Qs);
     return Qs;
 end
 
