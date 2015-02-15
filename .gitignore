@@ -1,0 +1,6 @@
+# Folder to dump useless things to
+trash/*
+
+# Emacs temporary and backup files
+*~
+\#*#
