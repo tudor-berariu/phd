@@ -1,6 +1,13 @@
 #!/usr/local/bin/julia
 
 #=
+    TODO: [X] sort agents before executing actions
+          [ ] export plots every N seasons
+          [ ] evaluation function
+          [ ] epsilon-decay
+          [ ] visualization
+          [ ] ANN
+
 
     In this scenario a couple of agents need to learn how to deliver
     gold from a mine to a deposit. Both mines and deposits emit radio
@@ -79,8 +86,19 @@ const validActions = [DO_NOTHING,
                       UP_LEFT, UP_RIGHT, DOWN_LEFT, DOWN_RIGHT,
                       DO_LOAD, DO_UNLOAD];
 
-dy(action::Action) = action & UP > 0 ? -1 : action & DOWN > 0 ? 1 : 0;
-dx(action::Action) = action & LEFT > 0 ? -1 : action & RIGHT > 0 ? 1 : 0;
+isMoveAction(action::Action) = (action > DO_NOTHING) && (action < DO_LOAD);
+
+δy(action::Action) = action & UP > 0 ? -1 : action & DOWN > 0 ? 1 : 0;
+δx(action::Action) = action & LEFT > 0 ? -1 : action & RIGHT > 0 ? 1 : 0;
+
+function nextCell(row::Integer, column::Integer, action::Action)
+    δRows = δy(action);
+    δColumns = δx(action);
+    newRow = min(HEIGHT, max(1, row + δRows));
+    newColumn = min(WIDTH, max(1, column + δColumns));
+    return newRow, newColumn;
+end
+
 
 #=
     RadioInfo
@@ -116,16 +134,17 @@ sqEuclid(r1, c1, r2, c2) = (r1 - r2) * (r1 - r2) + (c1 - c2) * (c1 - c2);
 
 # ---------------------------------------
 
-const HEIGHT         = 10;
-const WIDTH          = 10;
-const AGENTS_NO      = 1;
-const WAREHOUSES_NO  = 1;
-const MINES_NO       = 1;
-const RANGE          = 6;
+const HEIGHT         = 25;
+const WIDTH          = 25;
+const AGENTS_NO      = 20;
+const WAREHOUSES_NO  = 3;
+const MINES_NO       = 3;
+const RANGE          = 5;
 const AGENT_RANGE    = 1;
-const MIN_DIST       = 3;
+const MIN_DIST       = 6;
 const SEASONS_NO     = 10000;
 const EPISODES_NO    = 5000;
+
 # ---------------------------------------
 
 type GlobalState
@@ -263,7 +282,7 @@ function computeRadioSignal(board, warehouses, mines)
     return wSignal, mSignal;
 end
 
-function init_scenario()
+function initialState()
     board = fill(NOTHING, WIDTH, HEIGHT);
     # Put warehouses and mines
     warehouses, mines = place_buildings();
@@ -317,8 +336,58 @@ function perceiveMap(gs::GlobalState, oldState::AgentState, a::Integer)
     return vcat(wSignal, mSignal, reshape(state, diameter*diameter));
 end
 
-function orderAgents(gs::GlobalState, actions::Array{Action, 1})
-    return shuffle(1:length(actions));
+function sortAgents(gs::GlobalState, actions::Array{Action, 1})
+    sortedAgents = zeros(Integer, AGENTS_NO);
+    crtIdx = 1;
+    leftAgents = Array(Integer, 0);
+    waitsOn = zeros(Integer, AGENTS_NO);
+
+    # First put in the finall list all agents that do not wait on others to move
+    for i in 1:AGENTS_NO
+        if isMoveAction(actions[i])
+            crtRow = gs.agents[ROW,i];
+            crtColumn = gs.agents[COLUMN,i];
+            nextRow, nextColumn = nextCell(crtRow, crtColumn, actions[i]);
+            if (((nextRow != crtRow) || (nextColumn != crtColumn)) &&
+                ((gs.board[nextRow, nextColumn] | AGENT) == AGENT))
+                push!(leftAgents, i);
+                for j in 1:AGENTS_NO
+                    if gs.agents[:, j] == [nextRow, nextColumn]
+                        waitsOn[i] = j;
+                        break;
+                    end
+                end
+                continue;
+            end
+        end
+        sortedAgents[crtIdx] = i;
+        crtIdx = crtIdx + 1;
+    end
+
+    # Put agents that wait for agents already put in the final list
+    foundOne = true;
+    while foundOne && crtIdx <= AGENTS_NO
+        tmp = Array(Integer, 0)
+        foundOne = false;
+        for i in 1:length(leftAgents)
+            canPerform = false;
+            for j in length(sortedAgents):-1:1
+                if sortedAgents[j] == waitsOn[i]
+                    foundOne = true;
+                    canPerform = true;
+                    break;
+                end
+            end
+            if canPerform
+                sortedAgents[crtIdx] = i;
+                crtIdx = crtIdx + 1;
+            else
+                push!(tmp, i);
+            end
+        end
+        leftAgents = deepcopy(tmp);
+    end
+    return vcat(sortedAgents, leftAgents);
 end
 
 function doLoad(gs::GlobalState, ag::Integer)
@@ -357,19 +426,13 @@ end
 
 function doMove(gs::GlobalState, ag::Integer, action::Action)
     row = gs.agents[ROW, ag];
-    col = gs.agents[COLUMN, ag];
-    if action == DO_NOTHING
-        return
-    end
-    δrows = dy(action)
-    δcols = dx(action)
-    new_row = min(HEIGHT, max(1, row + δrows))
-    new_col = min(WIDTH, max(1, col + δcols))
-    if gs.board[new_row, new_col] == NOTHING
-        gs.board[new_row, new_col] = gs.board[row, col];
-        gs.board[row, col] = NOTHING;
-        gs.agents[ROW, ag] = new_row;
-        gs.agents[COLUMN, ag] = new_col;
+    column = gs.agents[COLUMN, ag];
+    newRow, newColumn = nextCell(row, column, action);
+    if gs.board[newRow, newColumn] == NOTHING
+        gs.board[newRow, newColumn] = gs.board[row, column];
+        gs.board[row, column] = NOTHING;
+        gs.agents[ROW, ag] = newRow;
+        gs.agents[COLUMN, ag] = newColumn;
     end
     nothing
 end
@@ -434,10 +497,13 @@ function learn()
             rewards = zeros(Float64, AGENTS_NO);
             rewarders = zeros(Int64, AGENTS_NO);
             wDrops = zeros(Int64, WAREHOUSES_NO);
-            for ag in orderAgents(gs, actions)
-                if actions[ag] & DO_LOAD > 0
+            for ag in sortAgents(gs, actions)
+                if actions[ag] == DO_NOTHING
+                    continue
+                end
+                if actions[ag] == DO_LOAD
                     doLoad(gs, ag);
-                elseif actions[ag] & DO_UNLOAD > 0
+                elseif actions[ag] == DO_UNLOAD
                     wIdx = doUnload(gs, ag);
                     if wIdx > 0
                         wDrops[wIdx] = wDrops[wIdx] + 1;
@@ -466,8 +532,8 @@ end
 
 const boardChar = Dict{CellInfo, Char}(EMPTY => char('\u25a1'),
                                        LOADED => char('\u25a0'),
-                                       WAREHOUSE => char('\u25c7'),
-                                       MINE => char('\u25c6'),
+                                       WAREHOUSE => char('\u2302'),
+                                       MINE => char('\u233e'),
                                        NOTHING => ' ',
                                        WALL => 'X');
 
