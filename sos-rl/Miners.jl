@@ -18,7 +18,7 @@ const AGENTS_NO        = 15;
 const WAREHOUSES_NO    = 3;
 const MINES_NO         = 3;
 const RANGE            = 10;
-const AGENT_RANGE      = 1.5;
+const AGENT_RANGE      = 2.5;
 const MIN_DIST         = 4;
 
 # -----------------------------------------------------------------------------
