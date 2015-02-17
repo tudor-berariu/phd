@@ -1,3 +1,5 @@
+#!/usr/local/bin/julia
+
 using Miners
 
 function test(seasons, episodes)
