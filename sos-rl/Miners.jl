@@ -2,23 +2,21 @@
 
 module Miners
 
-#using Base.Test;
+using Scenarios;
 
-export GlobalState, AgentState, Action, AgentState
-export AGENTS_NO, WAREHOUSES_NO
-export initialState, perceiveMap, validActions, doActions
+export Gatherers;
 
 # -----------------------------------------------------------------------------
 
 #= Global constants =#
 
-const HEIGHT           = 15;
-const WIDTH            = 15;
-const AGENTS_NO        = 15;
-const WAREHOUSES_NO    = 3;
-const MINES_NO         = 3;
+const HEIGHT           = 10;
+const WIDTH            = 10;
+const AGENTS_NO        = 1;
+const WAREHOUSES_NO    = 1;
+const MINES_NO         = 1;
 const RANGE            = 10;
-const AGENT_RANGE      = 2.5;
+const AGENT_RANGE      = 1.5;
 const MIN_DIST         = 4;
 
 # -----------------------------------------------------------------------------
@@ -554,5 +552,9 @@ function printBoard(board::Array{CellInfo, 2})
     end
     println();
 end
+
+Gatherers = Scenario{AgentState, Action}(AGENTS_NO, WAREHOUSES_NO,
+                                         initialState, perceiveMap,
+                                         validActions, doActions);
 
 end
