@@ -3,20 +3,21 @@
 module Miners
 
 export GlobalState, AgentState, Action, AgentState
-export initialState, doActions, perceiveMap
+export AGENTS_NO, WAREHOUSES_NO
+export initialState, perceiveMap, validActions, doActions
 
 # -----------------------------------------------------------------------------
 
 #= Global constants =#
 
-const HEIGHT           = 10;
-const WIDTH            = 10;
-const AGENTS_NO        = 4;
-const WAREHOUSES_NO    = 2;
-const MINES_NO         = 2;
-const RANGE            = 15;
+const HEIGHT           = 15;
+const WIDTH            = 15;
+const AGENTS_NO        = 10;
+const WAREHOUSES_NO    = 3;
+const MINES_NO         = 3;
+const RANGE            = 10;
 const AGENT_RANGE      = 1.5;
-const MIN_DIST         = 3;
+const MIN_DIST         = 4;
 
 # -----------------------------------------------------------------------------
 
@@ -408,8 +409,6 @@ function sortAgents(gs::GlobalState, actions::Array{Action, 1})
         crtIdx = crtIdx + 1;
     end
 
-    println("1st shot: $(sortedAgents)");
-
     # Put agents that wait for agents already put in the final list
     foundOne = true;
     while foundOne && crtIdx <= AGENTS_NO
@@ -432,9 +431,7 @@ function sortAgents(gs::GlobalState, actions::Array{Action, 1})
             end
         end
         leftAgents = deepcopy(tmp);
-        println("2nd shot: $(sortedAgents)");
     end
-    println("3rd shot: $(sortedAgents[1:(crtIdx-1)]) ~ $(leftAgents)");
     return vcat(sortedAgents[1:(crtIdx-1)], leftAgents);
 end
 

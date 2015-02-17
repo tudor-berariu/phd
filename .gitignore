@@ -4,3 +4,4 @@ trash/*
 # Emacs temporary and backup files
 *~
 \#*#
+results
