@@ -2,6 +2,8 @@
 
 module Miners
 
+#using Base.Test;
+
 export GlobalState, AgentState, Action, AgentState
 export AGENTS_NO, WAREHOUSES_NO
 export initialState, perceiveMap, validActions, doActions
@@ -12,7 +14,7 @@ export initialState, perceiveMap, validActions, doActions
 
 const HEIGHT           = 15;
 const WIDTH            = 15;
-const AGENTS_NO        = 10;
+const AGENTS_NO        = 15;
 const WAREHOUSES_NO    = 3;
 const MINES_NO         = 3;
 const RANGE            = 10;
@@ -356,32 +358,25 @@ function perceiveMap(gs::GlobalState,
                      a::Int64,
                      oldState::AgentState = [NO_SIGNAL, NO_SIGNAL])
     const RADIUS = trunc(Int64, AGENT_RANGE);
-    const diameter = 2 * RADIUS + 1;
-    const mid =  RADIUS + 1;
+    const diameter = RADIUS * 2 + 1;
+    const mid = RADIUS + 1;
+    const row = gs.agents[ROW,a];
+    const col = gs.agents[COLUMN,a];
 
-    t_idx = gs.agents[ROW, a] - RADIUS;
-    b_idx = gs.agents[ROW, a] + RADIUS;
-    l_idx = gs.agents[COLUMN, a] - RADIUS;
-    r_idx = gs.agents[COLUMN, a] + RADIUS;
+    state = fill(NOTHING, RADIUS*2+1, RADIUS*2+1);
 
-    t_rows = max(0,  1 - t_idx);
-    b_rows = max(0, b_idx - HEIGHT);
-    l_cols = max(0, 1 - l_idx);
-    r_cols = max(0, r_idx - WIDTH);
+    for c in 1:diameter, r in 1:diameter
+        if sqEuclid(r, c, mid, mid) <= AGENT_RANGE * AGENT_RANGE
+            state[r, c] =
+                ((1 <= col-mid+c <= WIDTH) && (1 <= row-mid+r <= HEIGHT)) ?
+            gs.board[row-mid+r,col-mid+c] : WALL
+        end
+    end
 
-    state =  vcat(fill(WALL, t_rows, diameter),
-                  hcat(fill(WALL, diameter - t_rows - b_rows, l_cols),
-                       gs.board[max(1, t_idx):min(HEIGHT, b_idx),
-                                max(1, l_idx):min(WIDTH, r_idx)],
-                       fill(WALL, diameter - t_rows - b_rows, r_cols)),
-                  fill(WALL, b_rows, diameter));
-    state = [sqEuclid(r, c, mid, mid) > AGENT_RANGE * AGENT_RANGE ?
-             NOTHING : state[r, c] for r in 1:diameter, c in 1:diameter];
-
-    wSignal = signalInfo(gs.wSignal[gs.agents[ROW, a], gs.agents[COLUMN, a]],
-                         oldState[1]);
-    mSignal = signalInfo(gs.mSignal[gs.agents[ROW, a], gs.agents[COLUMN, a]],
-                         oldState[2]);
+    const wSignal = signalInfo(gs.wSignal[gs.agents[ROW,a],gs.agents[COLUMN,a]],
+                               oldState[1]);
+    const mSignal = signalInfo(gs.mSignal[gs.agents[ROW,a],gs.agents[COLUMN,a]],
+                               oldState[2]);
     return vcat(wSignal, mSignal, state[:]);
 end
 
@@ -389,50 +384,41 @@ function sortAgents(gs::GlobalState, actions::Array{Action, 1})
     sortedAgents = zeros(Int64, AGENTS_NO);
     crtIdx = 1;
 
-    leftAgents = Array(Int64, 0);
+    isBlocked = fill(true, AGENTS_NO);
     waitsOn = zeros(Int64, AGENTS_NO);
 
     # First put in the finall list all agents that do not wait on others to move
     for i in 1:AGENTS_NO
         if isMoveAction(actions[i])
-            crtRow = gs.agents[ROW,i];
-            crtColumn = gs.agents[COLUMN,i];
+            const crtRow = gs.agents[ROW,i];
+            const crtColumn = gs.agents[COLUMN,i];
             nextRow, nextColumn = nextCell(crtRow, crtColumn, actions[i]);
             if (((nextRow != crtRow) || (nextColumn != crtColumn)) &&
-                isAgent(gs.board[nextRow, nextColumn]))
-                push!(leftAgents, i);
+                isAgent(gs.board[nextRow, nextColumn]) &&
+                isBlocked[gs.agentsMap[nextRow, nextColumn]])
                 waitsOn[i] = gs.agentsMap[nextRow, nextColumn];
                 continue;
             end
         end
         sortedAgents[crtIdx] = i;
         crtIdx = crtIdx + 1;
+        isBlocked[i] = false;
     end
 
     # Put agents that wait for agents already put in the final list
     foundOne = true;
     while foundOne && crtIdx <= AGENTS_NO
-        tmp = Array(Int64, 0);
         foundOne = false;
-        for i in 1:length(leftAgents)
-            canPerform = false;
-            for j in length(sortedAgents):-1:1
-                if sortedAgents[j] == waitsOn[leftAgents[i]]
-                    foundOne = true;
-                    canPerform = true;
-                    break;
-                end
-            end
-            if canPerform
-                sortedAgents[crtIdx] = leftAgents[i];
+        for i in find(isBlocked)
+            if isBlocked[waitsOn[i]] == false
+                foundOne = true
+                sortedAgents[crtIdx] = i;
                 crtIdx = crtIdx + 1;
-            else
-                push!(tmp, leftAgents[i]);
+                isBlocked[i] = false;
             end
         end
-        leftAgents = deepcopy(tmp);
     end
-    return vcat(sortedAgents[1:(crtIdx-1)], leftAgents);
+    return vcat(sortedAgents[1:(crtIdx-1)], find(isBlocked));
 end
 
 function doLoad(gs::GlobalState, ag::Int64)
@@ -470,9 +456,9 @@ function doRandomMove(gs::GlobalState, ag::Int64)
 end
 
 function doMove(gs::GlobalState, ag::Int64, action::Action)
-    row = gs.agents[ROW, ag];
-    column = gs.agents[COLUMN, ag];
-    newRow, newColumn = nextCell(row, column, action);
+    const row = gs.agents[ROW, ag];
+    const column = gs.agents[COLUMN, ag];
+    const newRow, newColumn = nextCell(row, column, action);
     if gs.board[newRow, newColumn] == NOTHING
         gs.board[newRow, newColumn] = gs.board[row, column];
         gs.board[row, column] = NOTHING;
@@ -484,7 +470,7 @@ function doMove(gs::GlobalState, ag::Int64, action::Action)
     nothing
 end
 
-reward(dropCount::Int64) = 2.0 ^ dropCount - 1;
+reward(dropCount::Int64) = 2.5 ^ dropCount - 1;
 
 function doActions(gs::GlobalState, actions::Array{Action, 1})
     rewards        = zeros(Float64, AGENTS_NO);
