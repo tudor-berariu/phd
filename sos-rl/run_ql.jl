@@ -3,4 +3,4 @@
 using Miners;
 using ReinforcementLearning;
 
-@time learn(Gatherers, 1000, 5000);
+@time learn(Gatherers, 5000, 5000);

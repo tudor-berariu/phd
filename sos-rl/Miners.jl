@@ -12,11 +12,11 @@ export Gatherers;
 
 const HEIGHT           = 10;
 const WIDTH            = 10;
-const AGENTS_NO        = 1;
+const AGENTS_NO        = 3;
 const WAREHOUSES_NO    = 1;
 const MINES_NO         = 1;
 const RANGE            = 10;
-const AGENT_RANGE      = 1.5;
+const AGENT_RANGE      = 2;
 const MIN_DIST         = 4;
 
 # -----------------------------------------------------------------------------

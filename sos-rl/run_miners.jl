@@ -17,4 +17,4 @@ end
 
 test(10, 20);
 
-@time test(500, 1000);
+@time test(50, 1000);
