@@ -10,14 +10,14 @@ export Gatherers;
 
 #= Global constants =#
 
-const HEIGHT           = 10;
-const WIDTH            = 10;
+const HEIGHT           = 12;
+const WIDTH            = 12;
 const AGENTS_NO        = 3;
 const WAREHOUSES_NO    = 1;
 const MINES_NO         = 1;
-const RANGE            = 10;
+const RANGE            = 8;
 const AGENT_RANGE      = 2;
-const MIN_DIST         = 4;
+const MIN_DIST         = 5;
 
 # -----------------------------------------------------------------------------
 
@@ -355,13 +355,12 @@ end
 function perceiveMap(gs::GlobalState,
                      a::Int64,
                      oldState::AgentState = [NO_SIGNAL, NO_SIGNAL])
-    const RADIUS = trunc(Int64, AGENT_RANGE);
-    const diameter = RADIUS * 2 + 1;
-    const mid = RADIUS + 1;
+    const diameter = trunc(Int64, AGENT_RANGE) * 2 + 1;
+    const mid = trunc(Int64, AGENT_RANGE) + 1;
     const row = gs.agents[ROW,a];
     const col = gs.agents[COLUMN,a];
 
-    state = fill(NOTHING, RADIUS*2+1, RADIUS*2+1);
+    state = fill(NOTHING, diameter, diameter);
 
     for c in 1:diameter, r in 1:diameter
         if sqEuclid(r, c, mid, mid) <= AGENT_RANGE * AGENT_RANGE
@@ -376,6 +375,27 @@ function perceiveMap(gs::GlobalState,
     const mSignal = signalInfo(gs.mSignal[gs.agents[ROW,a],gs.agents[COLUMN,a]],
                                oldState[2]);
     return vcat(wSignal, mSignal, state[:]);
+end
+
+function neighbours(gs::GlobalState, ag::Int64)
+    const row = gs.agents[ROW,ag];
+    const col = gs.agents[COLUMN,ag];
+    const mid = trunc(Int64, AGENT_RANGE) + 1;
+    const diameter = trunc(Int64, AGENT_RANGE) * 2 + 1;
+
+    nbs = Array(Int64, 0);
+
+    for c in 1:diameter, r in 1:diameter
+        if sqEuclid(r, c, mid, mid) <= AGENT_RANGE * AGENT_RANGE
+            if ((1 <= col-mid+c <= WIDTH) && (1 <= row-mid+r <= HEIGHT))
+                cellInfo = gs.agentsMap[row-mid+r,col-mid+c];
+                if cellInfo > 0 && cellInfo != ag
+                    push!(nbs, gs.agentsMap[row-mid+r, col-mid+c]);
+                end
+            end
+        end
+    end
+    return nbs;
 end
 
 function sortAgents(gs::GlobalState, actions::Array{Action, 1})
@@ -419,7 +439,7 @@ function sortAgents(gs::GlobalState, actions::Array{Action, 1})
     return vcat(sortedAgents[1:(crtIdx-1)], find(isBlocked));
 end
 
-function doLoad(gs::GlobalState, ag::Int64)
+function doLoad!(gs::GlobalState, ag::Int64)
     row = gs.agents[ROW, ag];
     col = gs.agents[COLUMN, ag];
     if isEmpty(gs.board[row, col])
@@ -433,7 +453,7 @@ function doLoad(gs::GlobalState, ag::Int64)
     nothing
 end
 
-function doUnload(gs::GlobalState, ag::Int64)
+function doUnload!(gs::GlobalState, ag::Int64)
     row = gs.agents[ROW, ag];
     col = gs.agents[COLUMN, ag];
     if isLoaded(gs.board[row, col])
@@ -448,12 +468,12 @@ function doUnload(gs::GlobalState, ag::Int64)
     return 0;
 end
 
-function doRandomMove(gs::GlobalState, ag::Int64)
-    doMove(gs, ag, moveActions[rand(1:end)])
+function doRandomMove!(gs::GlobalState, ag::Int64)
+    doMove!(gs, ag, moveActions[rand(1:end)])
     nothing
 end
 
-function doMove(gs::GlobalState, ag::Int64, action::Action)
+function doMove!(gs::GlobalState, ag::Int64, action::Action)
     const row = gs.agents[ROW, ag];
     const column = gs.agents[COLUMN, ag];
     const newRow, newColumn = nextCell(row, column, action);
@@ -470,7 +490,7 @@ end
 
 reward(dropCount::Int64) = 2.5 ^ dropCount - 1;
 
-function doActions(gs::GlobalState, actions::Array{Action, 1})
+function doActions!(gs::GlobalState, actions::Array{Action, 1})
     rewards        = zeros(Float64, AGENTS_NO);
     rewarders      = zeros(Int64, AGENTS_NO);
     warehouseDrops = zeros(Int64,   WAREHOUSES_NO);
@@ -478,17 +498,17 @@ function doActions(gs::GlobalState, actions::Array{Action, 1})
     for ag in sortAgents(gs, actions)
         if actions[ag] != DO_NOTHING
             if actions[ag] == DO_LOAD
-                doLoad(gs, ag);
+                doLoad!(gs, ag);
             elseif actions[ag] == DO_UNLOAD
-                wIdx = doUnload(gs, ag);
+                wIdx = doUnload!(gs, ag);
                 if wIdx > 0
                     warehouseDrops[wIdx] = warehouseDrops[wIdx] + 1;
                     rewarders[ag] = wIdx;
                 end
             elseif actions[ag] == DO_RANDOM_MOVE
-                doRandomMove(gs, ag);
+                doRandomMove!(gs, ag);
             else
-                doMove(gs, ag, actions[ag]);
+                doMove!(gs, ag, actions[ag]);
             end
         end
     end
@@ -555,6 +575,7 @@ end
 
 Gatherers = Scenario{AgentState, Action}(AGENTS_NO, WAREHOUSES_NO,
                                          initialState, perceiveMap,
-                                         validActions, doActions);
+                                         validActions, doActions!,
+                                         neighbours);
 
 end

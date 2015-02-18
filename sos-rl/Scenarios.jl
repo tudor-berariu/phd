@@ -8,7 +8,8 @@ immutable Scenario{AgentState, Action}
     init::Function
     perceive::Function
     validActions::Array{Action, 1}
-    doActions::Function
+    doActions!::Function
+    neighbours::Function
 end
 
 end

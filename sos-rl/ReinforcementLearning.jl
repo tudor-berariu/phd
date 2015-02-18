@@ -9,9 +9,12 @@ using Cairo;
 using DataFrames;
 using Gadfly;
 
-const EVAL_EVERY       = 40;
-const EVAL_SEASONS_NO  = 10;
-const EVAL_EPISODES_NO = 5000;
+const EVAL_EVERY       = 100;
+const EVAL_SEASONS_NO  = 20;
+const EVAL_EPISODES_NO = 1000;
+
+const EXCHANGE = true;
+const LEARNS_ONE = true;
 
 type Results
     scores::Array{Float64,2}
@@ -45,14 +48,46 @@ function bestAction{State,Action}(Qs::Dict{State,Dict{Action,Float64}},
     return bestA;
 end
 
+function bestPair{State,Action}(Qs::Dict{State,Dict{Action,Float64}},
+                                validActions::Array{Action,1},
+                                state::State)
+    bestA = rand(validActions);
+    bestQ = 0.0;
+    if haskey(Qs, state)
+        AsQs = Qs[state];
+        for (a, Q) in AsQs
+            if Q > bestQ
+                bestA = a;
+                bestQ = Q;
+            end
+        end
+    end
+    return (bestA, bestQ);
+end
+
+
 function ϵGreedy{State, Action}(Qs::Dict{State,Dict{Action,Float64}},
                                 validActions::Array{Action,1},
                                 state::State,
-                                ϵ::Float64 = 0.01)
+                                ϵ::Float64)
     if rand() < ϵ
         return validActions[rand(1:end)];
     else
         return bestAction(Qs, validActions, state);
+    end
+end
+
+function ϵGreedy2{State, Action}(Qs::Dict{State,Dict{Action,Float64}},
+                                 validActions::Array{Action, 1},
+                                 state::State,
+                                 ϵ::Float64,
+                                 neighbourA::Action,
+                                 neighbourQ::Float64)
+    if rand() < ϵ
+        return validAction[rand(1:end)];
+    else
+        A, Q = bestPair(Qs, validActions, state);
+        return Q > neighbourQ ? A : neighbourA;
     end
 end
 
@@ -97,11 +132,32 @@ function learn{State,Action}(s::Scenario{State,Action}, SEASONS_NO, EPISODES_NO)
             # Choose actions
             ϵ = log_decay(0.003, max_ϵ, episode, EPISODES_NO);
             for ag in 1:AGENTS_NO
-                actions[ag] = ϵGreedy(Qs[ag], s.validActions, states[ag], ϵ);
+                if LEARNS_ONE && (mod(div(season,10), AGENTS_NO) + 1) != ag
+                    actions[ag] = bestAction(Qs[ag],s.validActions,states[ag]);
+                else
+                    if EXCHANGE
+                        ns = s.neighbours(gs, ag);
+                        neighbourA = rand(s.validActions);
+                        neighbourQ = 0.0;
+                        for n in ns
+                            nA, nQ = bestPair(Qs[n],s.validActions,states[ag]);
+                            if nQ > neighbourQ
+                                neighbourA = nA;
+                                neighbourQ = nQ;
+                            end
+                        end
+                        actions[ag] = ϵGreedy2(Qs[ag], s.validActions,
+                                               states[ag], ϵ,
+                                               neighbourA, neighbourQ);
+                    else
+                        actions[ag] = ϵGreedy(Qs[ag], s.validActions,
+                                              states[ag], ϵ);
+                    end
+                end
             end
 
             # Do actions
-            rewards, rewarders = s.doActions(gs, actions);
+            rewards, rewarders = s.doActions!(gs, actions);
             total_score += sum(rewards);
             states, prevStates = prevStates, states;
             for ag in 1:AGENTS_NO
@@ -181,52 +237,42 @@ end
 function savePlots{State,Action}(season::Int64, idx::Int64,
                                  res::Results,
                                  Qs::Array{Dict{State,Dict{Action,Float64}},1})
-    @sync begin
-        @async begin
-            dfStates = DataFrame(Season=EVAL_EVERY:EVAL_EVERY:season,
-                                 Max=1.0.*maximum(res.statesNo[:,1:idx],1)[:],
-                                 Min=1.0.*minimum(res.statesNo[:,1:idx],1)[:],
-                                 Mean = mean(res.statesNo[:,1:idx],1)[:]);
-            draw(PDF("results/states.pdf", 6inch, 3inch),
-                 plot(dfStates, x=:Season, y=:Mean, ymax=:Max, ymin=:Min,
-                      Geom.line, Geom.ribbon,
-                      Guide.ylabel("No. of states"),
-                      Guide.title("Evolution of dictionary size"),
-                      Guide.xlabel("Learning Season"))
-                 );
-        end
-        @async begin
-            # Plot score
-            dfScore = DataFrame(Season = EVAL_EVERY:EVAL_EVERY:season,
-                                Max = 1.0 .* maximum(res.scores[:,1:idx], 1)[:],
-                                Min = 1.0 .* minimum(res.scores[:,1:idx], 1)[:],
-                                Mean = mean(res.scores[:,1:idx], 1)[:]);
-            draw(PDF("results/scores.pdf", 6inch, 3inch),
-                 plot(dfScore, x=:Season, y=:Mean, ymax=:Max, ymin=:Min,
-                      Geom.line, Geom.ribbon,
-                      Guide.ylabel("Score"),
-                      Guide.title("Evolution of score"),
-                      Guide.xlabel("Learning Season"))
-                 );
-        end
-        @async begin
-            # Plot drops
-            dfDrops=DataFrame(Season = [div(i, 8) + 1 for i=0:(idx * 8 - 1)],
-                              Drops = [mod(i, 8) + 1 for i=0:(idx * 8 - 1)],
-                              Count = res.drops[1:(idx * 8)])
-            #println(dfDrops);
-            const m = maximum(sum(res.drops,1));
-            const m10 = max(1, div(m, 10));
-            draw(PDF("results/drops.pdf", 6inch, 3inch),
-                 plot(dfDrops, x=:Season, y=:Count, color=:Drops,
-                      Geom.bar(position=:stack),
-                      Guide.yticks(ticks=[0:m10:m]))
-                 );
-        end
-        #= @async begin
-            JLD.save("results/qs.jld", "Qs", Qs);
-        end =#
-    end
+    dfStates = DataFrame(Season=EVAL_EVERY:EVAL_EVERY:season,
+                         Max=1.0.*maximum(res.statesNo[:,1:idx],1)[:],
+                         Min=1.0.*minimum(res.statesNo[:,1:idx],1)[:],
+                         Mean = mean(res.statesNo[:,1:idx],1)[:]);
+    draw(PDF("results/states.pdf", 6inch, 3inch),
+         plot(dfStates, x=:Season, y=:Mean, ymax=:Max, ymin=:Min,
+              Geom.line, Geom.ribbon,
+              Guide.ylabel("No. of states"),
+              Guide.title("Evolution of dictionary size"),
+              Guide.xlabel("Learning Season"))
+         );
+    # Plot score
+    dfScore = DataFrame(Season = EVAL_EVERY:EVAL_EVERY:season,
+                        Max = 1.0 .* maximum(res.scores[:,1:idx], 1)[:],
+                        Min = 1.0 .* minimum(res.scores[:,1:idx], 1)[:],
+                        Mean = mean(res.scores[:,1:idx], 1)[:]);
+    draw(PDF("results/scores.pdf", 6inch, 3inch),
+         plot(dfScore, x=:Season, y=:Mean, ymax=:Max, ymin=:Min,
+              Geom.line, Geom.ribbon,
+              Guide.ylabel("Score"),
+              Guide.title("Evolution of score"),
+              Guide.xlabel("Learning Season"))
+         );
+    # Plot drops
+    dfDrops=DataFrame(Season=[(div(i,8)+1) * EVAL_EVERY for i=0:(idx*8-1)],
+                      Drops = [mod(i,8)+1 for i=0:(idx*8-1)],
+                      Count = res.drops[1:(idx * 8)])
+    #println(dfDrops);
+    const m = maximum(sum(res.drops,1));
+    const m10 = max(1, div(m, 10));
+    draw(PDF("results/drops.pdf", 6inch, 3inch),
+         plot(dfDrops, x=:Season, y=:Count, color=:Drops,
+              Geom.bar(position=:stack),
+              Guide.yticks(ticks=[0:m10:m]))
+         );
+    #JLD.save("results/qs.jld", "Qs", Qs);
 end
 
 
