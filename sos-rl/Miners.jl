@@ -10,8 +10,8 @@ export Gatherers;
 
 #= Global constants =#
 
-const HEIGHT           = 12;
-const WIDTH            = 12;
+const HEIGHT           = 15;
+const WIDTH            = 15;
 const AGENTS_NO        = 3;
 const WAREHOUSES_NO    = 1;
 const MINES_NO         = 1;

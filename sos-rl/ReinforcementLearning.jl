@@ -84,7 +84,7 @@ function ϵGreedy2{State, Action}(Qs::Dict{State,Dict{Action,Float64}},
                                  neighbourA::Action,
                                  neighbourQ::Float64)
     if rand() < ϵ
-        return validAction[rand(1:end)];
+        return validActions[rand(1:end)];
     else
         A, Q = bestPair(Qs, validActions, state);
         return Q > neighbourQ ? A : neighbourA;
@@ -127,7 +127,7 @@ function learn{State,Action}(s::Scenario{State,Action}, SEASONS_NO, EPISODES_NO)
         end
 
         max_ϵ = log_decay(0.05, 0.3, season, SEASONS_NO);
-        total_score = 0.0;
+        #total_score = 0.0;
         for episode in 1:EPISODES_NO
             # Choose actions
             ϵ = log_decay(0.003, max_ϵ, episode, EPISODES_NO);
@@ -155,10 +155,10 @@ function learn{State,Action}(s::Scenario{State,Action}, SEASONS_NO, EPISODES_NO)
                     end
                 end
             end
-
+            #println("!");
             # Do actions
             rewards, rewarders = s.doActions!(gs, actions);
-            total_score += sum(rewards);
+            #total_score += sum(rewards);
             states, prevStates = prevStates, states;
             for ag in 1:AGENTS_NO
                 states[ag] = s.perceive(gs, ag, prevStates[ag]);
@@ -167,7 +167,7 @@ function learn{State,Action}(s::Scenario{State,Action}, SEASONS_NO, EPISODES_NO)
                          0.9, 0.05);
             end
         end
-        println(total_score);
+        #println(total_score);
         if mod(season, EVAL_EVERY) == 0
             assess(s, SEASONS_NO, EPISODES_NO, season, Qs, results);
         end
@@ -213,7 +213,7 @@ function assess{State, Action}(s::Scenario{State, Action},
                 actions[ag] = bestAction(Qs[ag], s.validActions, states[ag]);
             end
             # Do actions
-            rewards, rewarders = s.doActions(gs, actions);
+            rewards, rewarders = s.doActions!(gs, actions);
 
             prevStates, states = states, prevStates;
             for ag in 1:AGENTS_NO
