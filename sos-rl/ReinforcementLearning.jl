@@ -10,7 +10,7 @@ using DataFrames;
 using Gadfly;
 
 const SEASONS_NO = 50001;
-const EPISODES_NO = 50000;
+const EPISODES_NO = 40000;
 
 const EVAL_EVERY       = 200;
 const EVAL_SEASONS_NO  = 25;
