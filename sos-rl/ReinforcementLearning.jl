@@ -9,14 +9,18 @@ using Cairo;
 using DataFrames;
 using Gadfly;
 
-const EVAL_EVERY       = 100;
-const EVAL_SEASONS_NO  = 20;
-const EVAL_EPISODES_NO = 1000;
+const SEASONS_NO = 50000;
+const EPISODES_NO = 50000;
 
-const EXCHANGE = true;
-const LEARNS_ONE = true;
+const EVAL_EVERY       = 200;
+const EVAL_SEASONS_NO  = 25;
+const EVAL_EPISODES_NO = 2000;
+
+const EXCHANGE = false;
+const LEARNS_ONE = false;
 
 type Results
+    bestScore::Float64
     scores::Array{Float64,2}
     statesNo::Array{Int64,2}
     drops::Array{Int64,2}
@@ -100,7 +104,7 @@ function updateQs{State,Action}(Qs::Dict{State,Dict{Action,Float64}},
     nothing
 end
 
-function learn{State,Action}(s::Scenario{State,Action}, SEASONS_NO, EPISODES_NO)
+function learn{State,Action}(s::Scenario{State,Action})
     const AGENTS_NO = s.AGENTS_NO;
     const REWARDERS_NO = s.REWARDERS_NO;
 
@@ -115,7 +119,8 @@ function learn{State,Action}(s::Scenario{State,Action}, SEASONS_NO, EPISODES_NO)
     prevStates = Array(State, AGENTS_NO);
     states = Array(State, AGENTS_NO);
     #= Evaluation =#
-    results = Results(zeros(Int64, EVAL_SEASONS_NO, div(SEASONS_NO,EVAL_EVERY)),
+    results = Results(0.0,
+                      zeros(Int64, EVAL_SEASONS_NO, div(SEASONS_NO,EVAL_EVERY)),
                       zeros(Int64, AGENTS_NO, div(SEASONS_NO,EVAL_EVERY)),
                       zeros(Int64, 8, div(SEASONS_NO,EVAL_EVERY)));
     # ---
@@ -155,19 +160,19 @@ function learn{State,Action}(s::Scenario{State,Action}, SEASONS_NO, EPISODES_NO)
                     end
                 end
             end
-            #println("!");
+
             # Do actions
             rewards, rewarders = s.doActions!(gs, actions);
-            #total_score += sum(rewards);
+
             states, prevStates = prevStates, states;
             for ag in 1:AGENTS_NO
                 states[ag] = s.perceive(gs, ag, prevStates[ag]);
                 updateQs(Qs[ag],
                          prevStates[ag], actions[ag], rewards[ag], states[ag],
-                         0.9, 0.05);
+                         0.9, 0.04);
             end
         end
-        #println(total_score);
+
         if mod(season, EVAL_EVERY) == 0
             assess(s, SEASONS_NO, EPISODES_NO, season, Qs, results);
         end
@@ -193,15 +198,9 @@ function assess{State, Action}(s::Scenario{State, Action},
     actions = Array(Action, AGENTS_NO);
     prevStates = Array(State, AGENTS_NO);
     states = Array(State, AGENTS_NO);
-    #= Evaluation =#
-    #=
-    eval = Evaluation(zeros(Int64, EVAL_SEASONS_NO, div(SEASONS_NO,EVAL_EVERY)),
-                      zeros(Int64, AGENTS_NO, div(SEASONS_NO,EVAL_EVERY)),
-                      zeros(Int64, 8, div(SEASONS_NO,EVAL_EVERY)));
-    =#
+
     # ---
     for evalSeason in 1:EVAL_SEASONS_NO
-        #println("S$(season)");
         gs = s.init()
         for ag in 1:AGENTS_NO
             states[ag] = s.perceive(gs, ag);
@@ -232,6 +231,11 @@ function assess{State, Action}(s::Scenario{State, Action},
         #= Save plots =#
     # Plot number of states
     @time savePlots(season, idx, res, Qs);
+    if sum(res.scores[:,idx]) > res.bestScore
+        res.bestScore = sum(res.scores[:,idx]);
+        @time JLD.save("results/qs.jld", "Qs", Qs);
+    end
+    nothing
 end
 
 function savePlots{State,Action}(season::Int64, idx::Int64,
@@ -272,7 +276,7 @@ function savePlots{State,Action}(season::Int64, idx::Int64,
               Geom.bar(position=:stack),
               Guide.yticks(ticks=[0:m10:m]))
          );
-    #JLD.save("results/qs.jld", "Qs", Qs);
+    nothing
 end
 
 
