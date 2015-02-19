@@ -269,6 +269,8 @@ function assess{State, Action}(s::Scenario{State, Action},
         end
         res.dirty = false;
     end
+    println(season);
+    flush(STDOUT);
     nothing
 end
 

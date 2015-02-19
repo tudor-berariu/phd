@@ -13,7 +13,7 @@ for ag in `seq 1 8`; do
             cp Miners.jl experiments/$DIR/
             cp run_ql.jl experiments/$DIR/
             cd experiments/$DIR
-            #sed -i 's/usr\/local\/bin\/julia/usr\/bin\/julia/' run_ql.jl
+            sed -i 's/usr\/local\/bin\/julia/usr\/bin\/julia/' run_ql.jl
             # Correct number of agents
             sed -i "s/const AGENTS_NO        = 8;/const AGENTS_NO        = "$ag";/" Miners.jl
             # Correct strategies
