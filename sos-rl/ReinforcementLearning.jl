@@ -4,26 +4,28 @@ export learn;
 
 using Scenarios;
 
-using HDF5, JLD
+#using HDF5, JLD
 using Cairo;
 using DataFrames;
 using Gadfly;
 
-const SEASONS_NO = 50001;
-const EPISODES_NO = 40000;
+const SEASONS_NO = 501;
+const EPISODES_NO = 400;
 
-const EVAL_EVERY       = 200;
+const EVAL_EVERY       = 250;
 const EVAL_SEASONS_NO  = 25;
 const EVAL_EPISODES_NO = 1000;
 
 const EXCHANGE = false;
 const LEARNS_ONE = false;
 
-type Results
+type Results{State, Action}
     bestScore::Float64
     scores::Array{Float64,2}
     statesNo::Array{Int64,2}
     drops::Array{Int64,2}
+    dirty::Bool
+    Qs::Array{Dict{State,Dict{Action,Float64}},1}
 end
 
 log_decay(min_val, max_val, step, steps_no) =
@@ -121,9 +123,11 @@ function learn{State,Action}(s::Scenario{State,Action})
     #= Evaluation =#
     const evals_no = div(SEASONS_NO - 1 ,EVAL_EVERY) + 1;
     results = Results(0.0,
-                      zeros(Int64, EVAL_SEASONS_NO, evals_no),
+                      zeros(Float64, EVAL_SEASONS_NO, evals_no),
                       zeros(Int64, AGENTS_NO, evals_no),
-                      zeros(Int64, 8, evals_no));
+                      zeros(Int64, 8, evals_no),
+                      true,
+                      deepcopy(Qs));
     # ---
     for season in 1:SEASONS_NO
         #println("S$(season)");
@@ -232,9 +236,38 @@ function assess{State, Action}(s::Scenario{State, Action},
         #= Save plots =#
     # Plot number of states
     @time savePlots(season, idx, res, Qs);
-    if sum(res.scores[:,idx]) > res.bestScore
+    if sum(res.scores[:,idx]) > res.bestScore && season > 5000
         res.bestScore = sum(res.scores[:,idx]);
-        @time JLD.save("results/qs.jld", "Qs", Qs);
+        #@time JLD.save("results/qs.jld", "Qs", Qs);
+        res.Qs = deepcopy(Qs);
+        res.dirty = true;
+    end
+    if (isfile("do_save") || season == SEASONS_NO) && res.dirty
+        @time for ag in 1:length(res.Qs)
+            println(length(res.Qs[ag]));
+            open("results/policy_$(ag)", "w") do f
+                for (s, d) in res.Qs[ag]
+                    if isempty(d) == false
+                        besta = convert(Uint8, 0);
+                        bestq = -Inf;
+                        for (a, q) in d
+                            if q > bestq
+                                bestq = q
+                                besta = a
+                            end
+                        end
+                        write(f, convert(Uint8,length(s)));
+                        write(f, s);
+                        write(f, besta);
+                    end
+                end
+                flush(f);
+            end
+        end
+        open("results/scores", "w") do f
+            write(f, mean(res.scores[:,1:idx], 1));
+        end
+        res.dirty = false;
     end
     nothing
 end
@@ -281,6 +314,5 @@ function savePlots{State,Action}(season::Int64, idx::Int64,
     draw(SVG("results/drops.svg", 6inch, 3inch), dropsPlot);
     nothing
 end
-
 
 end

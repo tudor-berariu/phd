@@ -12,7 +12,7 @@ export Gatherers;
 
 const HEIGHT           = 12;
 const WIDTH            = 12;
-const AGENTS_NO        = 1;
+const AGENTS_NO        = 8;
 const WAREHOUSES_NO    = 1;
 const MINES_NO         = 1;
 const DISTANCE         = 6;
@@ -117,7 +117,7 @@ const moveActions = [UP, DOWN, LEFT, RIGHT,
                      UP_LEFT, UP_RIGHT, DOWN_LEFT, DOWN_RIGHT];
 
 const validActions = [DO_NOTHING,
-                      DO_LOAD, DO_UNLOAD, DO_RANDOM_MOVE,
+                      DO_LOAD, DO_UNLOAD, #DO_RANDOM_MOVE,
                       UP, DOWN, LEFT, RIGHT,
                       UP_LEFT, UP_RIGHT, DOWN_LEFT, DOWN_RIGHT];
 
