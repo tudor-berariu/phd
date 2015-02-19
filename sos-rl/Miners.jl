@@ -232,6 +232,9 @@ function placeBuildings()
                        (max(abs(crd[1]-rw), abs(crd[2]-cw)) == DISTANCE),
                        [(r, c) for r in rw-DISTANCE:rw+DISTANCE,
                         c in cw-DISTANCE:cw+DISTANCE]);
+            if length(p) == 0
+                continue
+            end
             crd = rand(p);
             rm = crd[1];
             cm = crd[2];

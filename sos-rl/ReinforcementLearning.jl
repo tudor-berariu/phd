@@ -9,12 +9,12 @@ using Cairo;
 using DataFrames;
 using Gadfly;
 
-const SEASONS_NO = 50000;
+const SEASONS_NO = 50001;
 const EPISODES_NO = 50000;
 
 const EVAL_EVERY       = 200;
 const EVAL_SEASONS_NO  = 25;
-const EVAL_EPISODES_NO = 2000;
+const EVAL_EPISODES_NO = 1000;
 
 const EXCHANGE = false;
 const LEARNS_ONE = false;
@@ -119,10 +119,11 @@ function learn{State,Action}(s::Scenario{State,Action})
     prevStates = Array(State, AGENTS_NO);
     states = Array(State, AGENTS_NO);
     #= Evaluation =#
+    const evals_no = div(SEASONS_NO - 1 ,EVAL_EVERY) + 1;
     results = Results(0.0,
-                      zeros(Int64, EVAL_SEASONS_NO, div(SEASONS_NO,EVAL_EVERY)),
-                      zeros(Int64, AGENTS_NO, div(SEASONS_NO,EVAL_EVERY)),
-                      zeros(Int64, 8, div(SEASONS_NO,EVAL_EVERY)));
+                      zeros(Int64, EVAL_SEASONS_NO, evals_no),
+                      zeros(Int64, AGENTS_NO, evals_no),
+                      zeros(Int64, 8, evals_no));
     # ---
     for season in 1:SEASONS_NO
         #println("S$(season)");
@@ -173,7 +174,7 @@ function learn{State,Action}(s::Scenario{State,Action})
             end
         end
 
-        if mod(season, EVAL_EVERY) == 0
+        if mod(season-1, EVAL_EVERY) == 0
             assess(s, SEASONS_NO, EPISODES_NO, season, Qs, results);
         end
     end
@@ -189,7 +190,7 @@ function assess{State, Action}(s::Scenario{State, Action},
     const AGENTS_NO = s.AGENTS_NO;
     const REWARDERS_NO = s.REWARDERS_NO;
 
-    const idx = div(season, EVAL_EVERY);
+    const idx = div(season - 1, EVAL_EVERY) + 1;
 
     #= Number of states =#
     res.statesNo[:, idx] = [length(keys(Qs[ag])) for ag in 1:AGENTS_NO];
@@ -241,41 +242,43 @@ end
 function savePlots{State,Action}(season::Int64, idx::Int64,
                                  res::Results,
                                  Qs::Array{Dict{State,Dict{Action,Float64}},1})
-    dfStates = DataFrame(Season=EVAL_EVERY:EVAL_EVERY:season,
+    dfStates = DataFrame(Season=1:EVAL_EVERY:season,
                          Max=1.0.*maximum(res.statesNo[:,1:idx],1)[:],
                          Min=1.0.*minimum(res.statesNo[:,1:idx],1)[:],
                          Mean = mean(res.statesNo[:,1:idx],1)[:]);
-    draw(PDF("results/states.pdf", 6inch, 3inch),
-         plot(dfStates, x=:Season, y=:Mean, ymax=:Max, ymin=:Min,
-              Geom.line, Geom.ribbon,
-              Guide.ylabel("No. of states"),
-              Guide.title("Evolution of dictionary size"),
-              Guide.xlabel("Learning Season"))
-         );
+    statesPlot = plot(dfStates, x=:Season, y=:Mean, ymax=:Max, ymin=:Min,
+                      Geom.line, Geom.ribbon,
+                      Guide.ylabel("No. of states"),
+                      Guide.title("Evolution of dictionary size"),
+                      Guide.xlabel("Learning Season"));
+    draw(PDF("results/states.pdf", 6inch, 3inch), statesPlot);
+    draw(SVG("results/states.svg", 6inch, 3inch), statesPlot);
     # Plot score
-    dfScore = DataFrame(Season = EVAL_EVERY:EVAL_EVERY:season,
+    dfScore = DataFrame(Season = 1:EVAL_EVERY:season,
                         Max = 1.0 .* maximum(res.scores[:,1:idx], 1)[:],
                         Min = 1.0 .* minimum(res.scores[:,1:idx], 1)[:],
                         Mean = mean(res.scores[:,1:idx], 1)[:]);
-    draw(PDF("results/scores.pdf", 6inch, 3inch),
-         plot(dfScore, x=:Season, y=:Mean, ymax=:Max, ymin=:Min,
-              Geom.line, Geom.ribbon,
-              Guide.ylabel("Score"),
-              Guide.title("Evolution of score"),
-              Guide.xlabel("Learning Season"))
-         );
+    scorePlot = plot(dfScore, x=:Season, y=:Mean, ymax=:Max, ymin=:Min,
+                     Geom.line, Geom.ribbon,
+                     Guide.ylabel("Score"),
+                     Guide.title("Evolution of score"),
+                     Guide.xlabel("Learning Season"));
+
+    draw(PDF("results/scores.pdf", 6inch, 3inch), scorePlot);
+    draw(SVG("results/scores.svg", 6inch, 3inch), scorePlot);
+
     # Plot drops
-    dfDrops=DataFrame(Season=[(div(i,8)+1) * EVAL_EVERY for i=0:(idx*8-1)],
+    dfDrops=DataFrame(Season=[1 + div(i,8) * EVAL_EVERY for i=0:(idx*8-1)],
                       Drops = [mod(i,8)+1 for i=0:(idx*8-1)],
                       Count = res.drops[1:(idx * 8)])
     #println(dfDrops);
     const m = maximum(sum(res.drops,1));
     const m10 = max(1, div(m, 10));
-    draw(PDF("results/drops.pdf", 6inch, 3inch),
-         plot(dfDrops, x=:Season, y=:Count, color=:Drops,
-              Geom.bar(position=:stack),
-              Guide.yticks(ticks=[0:m10:m]))
-         );
+    dropsPlot = plot(dfDrops, x=:Season, y=:Count, color=:Drops,
+                     Geom.bar(position=:stack),
+                     Guide.yticks(ticks=[0:m10:m]));
+    draw(PDF("results/drops.pdf", 6inch, 3inch), dropsPlot);
+    draw(SVG("results/drops.svg", 6inch, 3inch), dropsPlot);
     nothing
 end
 
