@@ -9,11 +9,11 @@ using Cairo;
 using DataFrames;
 using Gadfly;
 
-const SEASONS_NO = 501;
-const EPISODES_NO = 400;
+const SEASONS_NO = 50001;
+const EPISODES_NO = 40000;
 
 const EVAL_EVERY       = 250;
-const EVAL_SEASONS_NO  = 25;
+const EVAL_SEASONS_NO  = 20;
 const EVAL_EPISODES_NO = 1000;
 
 const EXCHANGE = false;
