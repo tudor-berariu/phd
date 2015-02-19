@@ -10,14 +10,14 @@ export Gatherers;
 
 #= Global constants =#
 
-const HEIGHT           = 15;
-const WIDTH            = 15;
-const AGENTS_NO        = 3;
+const HEIGHT           = 12;
+const WIDTH            = 12;
+const AGENTS_NO        = 1;
 const WAREHOUSES_NO    = 1;
 const MINES_NO         = 1;
-const RANGE            = 8;
-const AGENT_RANGE      = 2;
-const MIN_DIST         = 5;
+const DISTANCE         = 6;
+const RANGE            = 15;
+const AGENT_RANGE      = 2.5;
 
 # -----------------------------------------------------------------------------
 
@@ -180,6 +180,7 @@ const SignalToChar = Dict{Signal, Char}(NO_SIGNAL    => char(' '),
 
 const ROW    = 1;
 const COLUMN = 2;
+const RC = [ROW, COLUMN];
 
 sqEuclid(r1, c1, r2, c2) = (r1 - r2) * (r1 - r2) + (c1 - c2) * (c1 - c2);
 
@@ -198,72 +199,64 @@ end
 # ---------------------------------------
 
 function placeBuildings()
+    assert(WAREHOUSES_NO == MINES_NO);
+
     warehouses = zeros(Int64, 2, WAREHOUSES_NO);
     mines = zeros(Int64, 2, MINES_NO);
 
-    sqMinDist = MIN_DIST * MIN_DIST;
-
     notOver = true;
-    warehouseIdx = 0;
-    mineIdx = 0;
+    idx = 0;
 
     const MAX_ATTEMPTS = 10;
 
-    while notOver
-        while notOver
-            attemptNo = 0
-            r = 0
-            c = 0
-            while attemptNo < MAX_ATTEMPTS
-                r = rand(MIN_DIST:(1 + HEIGHT - MIN_DIST));
-                c = rand(MIN_DIST:(1 + WIDTH - MIN_DIST));
-                isGood = true;
-                for i in 1:warehouseIdx
-                    if sqEuclid(warehouses[ROW, i],
-                                warehouses[COLUMN, i], r, c) < sqMinDist
-                        attemptNo = attemptNo + 1
-                        isGood = false
-                        break
-                    end
-                end
-                if isGood
-                    for i in 1:mineIdx
-                        if sqEuclid(mines[ROW, i],
-                                    mines[COLUMN, i], r, c) < sqMinDist
-                            attemptNo = attemptNo + 1
-                            isGood = false
-                            break
-                        end
-                    end
-                end
-                if isGood
-                    break
-                end
-                attemptNo = attemptNo + 1
-            end
-            if attemptNo == MAX_ATTEMPTS
-                break
-            end
-            if warehouseIdx < WAREHOUSES_NO
-                warehouseIdx = warehouseIdx + 1;
-                warehouses[ROW, warehouseIdx] = r;
-                warehouses[COLUMN, warehouseIdx] = c;
-            else
-                mineIdx = mineIdx + 1;
-                mines[ROW, mineIdx] = r;
-                mines[COLUMN, mineIdx] = c;
-                if mineIdx == MINES_NO
-                    notOver = false;
+    while idx < WAREHOUSES_NO
+        attemptNo = 0;
+        found = false
+        while attemptNo < MAX_ATTEMPTS && found == false
+            attemptNo += 1;
+            rw = rand(2:HEIGHT-1);
+            cw = rand(2:WIDTH-1);
+            isGood = true;
+            for i = 1:idx
+                if maximum(abs(warehouses[RC,i] - [rw, cw])) <=  DISTANCE ||
+                    maximum(abs(mines[RC,i] - [rw, cw])) <= DISTANCE
+                    isGood = false;
+                    break;
                 end
             end
+            if isGood == false
+                continue
+            end
+            p = filter(crd -> (crd[1] > 1) && (crd[1] < HEIGHT) &&
+                       (crd[2] > 1) && (crd[2] < WIDTH) &&
+                       (max(abs(crd[1]-rw), abs(crd[2]-cw)) == DISTANCE),
+                       [(r, c) for r in rw-DISTANCE:rw+DISTANCE,
+                        c in cw-DISTANCE:cw+DISTANCE]);
+            crd = rand(p);
+            rm = crd[1];
+            cm = crd[2];
+            for i = 1:idx
+                if maximum(abs(warehouses[RC,i] - [rm, cm])) <=  DISTANCE ||
+                    maximum(abs(mines[RC,i] - [rm, cm])) <= DISTANCE
+                    isGood = false;
+                    break;
+                end
+            end
+            if isGood == false
+                continue;
+            end
+            found = true
+            idx = idx + 1;
+            warehouses[RC, idx] = [rw, cw];
+            mines[RC, idx] = [rm, cm];
         end
-        if notOver
+        if found == false
             warehouses = zeros(Int64, 2, WAREHOUSES_NO);
             mines = zeros(Int64, 2, MINES_NO);
-            warehouseIdx = 0;
-            mineIdx = 0;
+            idx = 0;
         end
     end
+
     return warehouses, mines;
 end
 
