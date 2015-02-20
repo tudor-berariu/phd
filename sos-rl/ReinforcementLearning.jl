@@ -9,8 +9,8 @@ using Cairo;
 using DataFrames;
 using Gadfly;
 
-const SEASONS_NO = 50001;
-const EPISODES_NO = 40000;
+const SEASONS_NO = 501;
+const EPISODES_NO = 400;
 
 const EVAL_EVERY       = 250;
 const EVAL_SEASONS_NO  = 20;
@@ -178,8 +178,11 @@ function learn{State,Action}(s::Scenario{State,Action})
             end
         end
 
-        if mod(season-1, EVAL_EVERY) == 0
+        if mod(season-1, EVAL_EVERY) == 0 || isfile("do_exit")
             assess(s, SEASONS_NO, EPISODES_NO, season, Qs, results);
+        end
+        if isfile("do_exit")
+            break
         end
     end
     nothing
@@ -236,13 +239,15 @@ function assess{State, Action}(s::Scenario{State, Action},
         #= Save plots =#
     # Plot number of states
     @time savePlots(season, idx, res, Qs);
-    if sum(res.scores[:,idx]) > res.bestScore && season > 5000
+    if sum(res.scores[:,idx]) > res.bestScore &&
+        (season > 5000 || isfile("do_exit") || isfile("do_save"))
         res.bestScore = sum(res.scores[:,idx]);
         #@time JLD.save("results/qs.jld", "Qs", Qs);
         res.Qs = deepcopy(Qs);
         res.dirty = true;
     end
-    if (isfile("do_save") || season == SEASONS_NO) && res.dirty
+    if (isfile("do_exit") || isfile("do_save") || season == SEASONS_NO) &&
+        res.dirty
         @time for ag in 1:length(res.Qs)
             println(length(res.Qs[ag]));
             open("results/policy_$(ag)", "w") do f

@@ -486,6 +486,26 @@ end
 
 reward(dropCount::Int64) = 2.5 ^ dropCount - 1;
 
+function sizeHint()
+    x = zero(Int64)
+    const mid = trunc(Int64, AGENT_RANGE) + 1;
+    const diameter = trunc(Int64, AGENT_RANGE) * 2 + 1;
+    const cells = [(sqEuclid(r,c,mid,mid) <= AGENT_RANGE * AGENT_RANGE) ? 1 : 0
+                   for r in 1:diameter, c in 1:diameter];
+    const cellsNo = sum(cells)-1;
+    for i = 1:AGENTS_NO-1
+        l = one(Int64);
+        for j = 0:i
+            l *= 2 * (cellsNo - j);
+        end
+        x += l;
+    end
+    x *= 16 * 4 * (cellsNo - AGENTS_NO + 1);
+    x += cellsNo * 16 * 4;
+    println(x);
+    return x;
+end
+
 function doActions!(gs::GlobalState, actions::Array{Action, 1})
     rewards        = zeros(Float64, AGENTS_NO);
     rewarders      = zeros(Int64, AGENTS_NO);
